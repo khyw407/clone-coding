@@ -22,7 +22,6 @@ function App() {
   return (
     <React.Fragment>
       {init ? <AppRouter isLoggedIn={isLoggedIn} userObj={userObj} /> : "initializing..."}
-      <footer>&copy; {new Date().getFullYear()} Nwitter</footer>
     </React.Fragment>
   );
 }
