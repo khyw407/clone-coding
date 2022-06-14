@@ -15,10 +15,18 @@ const wsServer = SocketIO(httpServer);
 
 wsServer.on('connection', (socket) => {
   socket.on('enter_room', (roomName, done) => {
-    console.log(roomName);
-    setTimeout(() => {
-      done();
-    }, 5000);
+    done();
+    socket.join(roomName);
+    socket.to(roomName).emit('welcome');
+  });
+
+  socket.on('disconnecting', () => {
+    socket.rooms.forEach(room => socket.to(room).emit('bye'));
+  });
+
+  socket.on('new_message', (msg, room, done) => {
+    socket.to(room).emit('new_message', msg);
+    done();
   });
 });
 
