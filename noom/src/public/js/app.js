@@ -11,6 +11,7 @@ let muted = false;
 let cameraOff = false;
 let roomName;
 let myPeerConnection;
+let myDataChannel;
 
 const welcome = document.getElementById('welcome');
 const welcomeForm = document.querySelector('form');
@@ -108,6 +109,12 @@ function handleCameraClick() {
 
 async function handleCameraChange() {
   await getMedia(cameraSelect.value);
+
+  if(myPeerConnection) {
+    const videoTrack = myStream.getVideoTracks()[0];
+    const videoSender = myPeerConnection.getSenders().find(sender => sender.track.kind === 'video');
+    videoSender.replaceTrack(videoTrack);
+  }
 }
 
 muteBtn.addEventListener('click', handleMuteClick);
@@ -115,6 +122,11 @@ cameraBtn.addEventListener('click', handleCameraClick);
 cameraSelect.addEventListener('input', handleCameraChange);
 
 socket.on('welcome', async () => {
+  myDataChannel = myPeerConnection.createDataChannel('chat');
+  myDataChannel.addEventListener('message', (event) => {
+    console.log(event.data);
+  });
+  console.log('made data channel');
   const offer = await myPeerConnection.createOffer();
   myPeerConnection.setLocalDescription(offer);
   console.log('sent the offer');
@@ -122,6 +134,12 @@ socket.on('welcome', async () => {
 });
 
 socket.on('offer', async (offer) => {
+  myPeerConnection.addEventListener('datachannel', (event) => {
+    myDataChannel = event.channel;
+    myDataChannel.addEventListener('message', (event) => {
+      console.log(event.data);
+    });
+  });
   console.log('received the offer');
   myPeerConnection.setRemoteDescription(offer);
   const answer = await myPeerConnection.createAnswer();
@@ -135,14 +153,37 @@ socket.on('answer', answer => {
   myPeerConnection.setRemoteDescription(answer);
 });
 
+socket.on('ice', ice => {
+  console.log('received candidate');
+  myPeerConnection.addIceCandidate(ice);
+});
+
 //RTC
 function makeConnection() {
-  myPeerConnection = new RTCPeerConnection();
+  myPeerConnection = new RTCPeerConnection({
+    iceServers: [
+      {
+        urls: [
+          "stun:stun.l.google.com:19302",
+          "stun:stun1.l.google.com:19302",
+          "stun:stun2.l.google.com:19302",
+          "stun:stun3.l.google.com:19302",
+          "stun:stun4.l.google.com:19302",
+        ],
+      },
+    ],
+  }); //구글에서 제공하는 STUN서버 추가
   myPeerConnection.addEventListener('icecandidate', handleIce);
+  myPeerConnection.addEventListener('addstream', handleAddStream);
   myStream.getTracks().forEach(track => myPeerConnection.addTrack(track, myStream));
 }
 
 function handleIce(data) {
-  console.log('got ice candidate');
-  console.log(data);
+  console.log('sent candidate');
+  socket.emit('ice', data.candidate, roomName);
+}
+
+function handleAddStream(data) {
+  const peerFace = document.getElementById('peerFace');
+  peerFace.srcObject = data.stream;
 }
